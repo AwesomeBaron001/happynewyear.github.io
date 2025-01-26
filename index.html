@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>烟花效果</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-image: url('background.jpg');
+            background-size: contain;
+            background-position: center;
+            background-repeat: no-repeat;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+        }
+
+        #greeting {
+            color: #f20909c5;
+            font-size: 4em;
+            font-weight: bold;
+            text-align: center;
+            z-index: 2;
+            position: absolute; /* 改为绝对定位 */
+            top: 10%; /* 距离顶部 10%，可根据需求调整 */
+            left: 50%; /* 水平居中 */
+            transform: translateX(-50%); /* 水平居中调整 */
+            text-shadow: 
+                1px 1px 0px #f1f1f1,
+                2px 2px 2px rgba(0, 0, 0, 0.3);
+        }
+
+
+        #canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            z-index: 1;
+        }
+
+        #button {
+            position: fixed; /* 固定在底部 */
+            bottom: 20px; /* 离底部 20px */
+            z-index: 3; /* 高于 canvas 和 greeting */
+            padding: 10px 20px;
+            font-size: 1.2em;
+            background: linear-gradient(to bottom, #00bfff, #0080ff);
+            color: white;
+            border: none;
+            border-radius: 25px;
+            cursor: pointer;
+            box-shadow: 0 5px 10px rgba(0, 0, 0, 0.2), 0 2px 4px rgba(255, 255, 255, 0.5) inset;
+            transition: all 0.3s ease;
+        }
+
+        #button:hover {
+            box-shadow: 0 7px 14px rgba(0, 0, 0, 0.3), 0 2px 4px rgba(255, 255, 255, 0.6) inset;
+            transform: translateY(-2px);
+        }
+
+        #button:active {
+            box-shadow: 0 3px 6px rgba(0, 0, 0, 0.2) inset;
+            transform: translateY(2px);
+        }
+    </style>
+</head>
+<body>
+    <div id="greeting">粥粥新年快乐！</div>
+    <canvas id="canvas"></canvas>
+    <button id="button">放烟花</button>
+
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+
+        // 设置画布大小
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+        resizeCanvas();
+        window.addEventListener('resize', resizeCanvas);
+
+        // 定义图片区域
+        const imageX = canvas.width * 0.25; // 图片左边界
+        const imageY = canvas.height * 0.25; // 图片上边界
+        const imageWidth = canvas.width * 0.5; // 图片宽度
+        const imageHeight = canvas.height * 0.5; // 图片高度
+
+        // 粒子类
+        class Particle {
+            constructor(x, y, color) {
+                this.x = x;
+                this.y = y;
+                this.color = color;
+                this.radius = Math.random() * 4 + 1; // 粒子大小
+                this.angle = Math.random() * Math.PI * 2; // 粒子发射角度
+                this.speed = Math.random() * 3 + 2; // 粒子初始速度
+                this.friction = 0.98; // 粒子减速因子
+                this.gravity = 0.1; // 重力效果
+                this.alpha = 2; // 粒子透明度
+                this.decay = Math.random() * 0.00005 + 0.00002; // 粒子透明度减少速度
+                this.trail = []; // 用于存储粒子尾迹
+                this.maxTrail = 15; // 尾迹最大长度
+            }
+
+            draw() {
+                // 绘制粒子尾迹
+                ctx.save();
+                ctx.globalAlpha = this.alpha;
+                ctx.strokeStyle = this.color;
+                ctx.lineWidth = this.radius;
+
+                if (this.trail.length > 1) {
+                    ctx.beginPath();
+                    for (let i = 0; i < this.trail.length - 1; i++) {
+                        ctx.moveTo(this.trail[i].x, this.trail[i].y);
+                        ctx.lineTo(this.trail[i + 1].x, this.trail[i + 1].y);
+                    }
+                    ctx.stroke();
+                }
+
+                ctx.restore();
+            }
+
+            update() {
+                this.speed *= this.friction; // 减速
+                const vx = Math.cos(this.angle) * this.speed;
+                const vy = Math.sin(this.angle) * this.speed + this.gravity;
+
+                // 更新位置
+                this.x += vx;
+                this.y += vy;
+
+                // 更新尾迹
+                this.trail.push({ x: this.x, y: this.y });
+                if (this.trail.length > this.maxTrail) {
+                    this.trail.shift(); // 移除多余的尾迹点
+                }
+
+                // 减少透明度
+                this.alpha -= this.decay;
+            }
+        }
+
+
+        // 烟花类
+        class Firework {
+            constructor(x, y) {
+                this.x = canvas.width / 2; // 从屏幕底部中间发射
+                this.y = canvas.height;
+                this.targetX = x; // 爆炸的目标位置
+                this.targetY = y;
+                this.velocity = {
+                    x: (x - this.x) / 240,
+                    y: (y - this.y) / 240
+                };
+                this.exploded = false;
+                this.particles = [];
+                this.color = `hsl(${Math.random() * 360}, 100%, 50%)`;
+            }
+
+            draw() {
+                if (!this.exploded) {
+                    ctx.save();
+                    ctx.fillStyle = this.color;
+                    ctx.beginPath();
+                    ctx.arc(this.x, this.y, 3, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.restore();
+                }
+            }
+
+            update() {
+                if (!this.exploded) {
+                    this.x += this.velocity.x;
+                    this.y += this.velocity.y;
+
+                    // 到达目标位置后爆炸
+                    if (Math.abs(this.x - this.targetX) < 5 && Math.abs(this.y - this.targetY) < 5) {
+                        this.exploded = true;
+                        this.createParticles();
+                    }
+                } else {
+                    // 更新粒子
+                    this.particles = this.particles.filter(p => {
+                        p.update();
+                        return p.alpha > 0; // 当透明度为 0 时移除粒子
+                    });
+                }
+            }
+
+            createParticles() {
+                for (let i = 0; i < 100; i++) {
+                    this.particles.push(new Particle(this.x, this.y, this.color));
+                }
+            }
+        }
+
+        let fireworks = [];
+
+        // 动画循环
+        function animate() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height); // 清空画布
+
+            fireworks = fireworks.filter(firework => {
+                firework.update();
+                firework.draw();
+                firework.particles.forEach(p => p.draw());
+                return !firework.exploded || firework.particles.length > 0;
+            });
+
+            requestAnimationFrame(animate);
+        }
+
+        // 点击按钮触发烟花
+        document.getElementById('button').addEventListener('click', () => {
+            // 计算图片区域
+            const imageX = canvas.width * 0.25; // 图片左边界
+            const imageY = canvas.height * 0.25; // 图片上边界
+            const imageWidth = canvas.width * 0.5; // 图片宽度
+            const imageHeight = canvas.height * 0.25; // 图片高度的一半，限制在上半部分
+
+            // 限制烟花目标位置在图片的上半部分
+            const x = Math.random() * imageWidth + imageX; // 在图片宽度范围内随机生成
+            const y = Math.random() * imageHeight + imageY; // 在图片上半部分范围内随机生成
+            fireworks.push(new Firework(x, y));
+        });
+
+
+        // 开始动画
+        animate();
+    </script>
+</body>
+</html>
